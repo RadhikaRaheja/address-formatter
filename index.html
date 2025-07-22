@@ -4,11 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#4CAF50">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icons/icon-192.png">
-  <title>Address Formatter</title>
+  <title>Smart Address Formatter</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -19,21 +15,20 @@
     textarea {
       width: 100%;
       height: 200px;
-      margin-bottom: 10px;
       font-size: 14px;
       padding: 10px;
+      margin-bottom: 10px;
     }
     button {
       padding: 10px 20px;
-      margin-top: 5px;
       margin-right: 10px;
       cursor: pointer;
     }
     pre {
-      background: #f3f3f3;
+      background: #f9f9f9;
       padding: 15px;
-      white-space: pre-wrap;
       border-radius: 6px;
+      white-space: pre-wrap;
     }
     #copyBtn {
       display: none;
@@ -45,67 +40,83 @@
 </head>
 <body>
 
-  <h2>Unformatted Address:</h2>
-  <textarea id="rawInput" placeholder="Paste your address here..."></textarea>
+  <h2>Paste Unformatted Address:</h2>
+  <textarea id="rawInput" placeholder="Paste your raw address from WhatsApp here..."></textarea>
   <br>
   <button onclick="formatAddress()">Format Address</button>
   <button id="copyBtn" onclick="copyToClipboard()">Copy to Clipboard</button>
 
-  <h2>Formatted Address:</h2>
+  <h2>Formatted Address (Paragraph Style):</h2>
   <pre id="output"></pre>
 
   <script>
-    const pincodeStateMap = {
-      "132103": "Haryana",
-      "110001": "Delhi",
-      "400001": "Maharashtra"
-    };
+    function capitalizeWords(text) {
+      return text
+        .toLowerCase()
+        .replace(/\b\w/g, l => l.toUpperCase());
+    }
 
     function formatAddress() {
       const input = document.getElementById('rawInput').value.trim();
-      const lines = input.split('\n').map(line => line.trim()).filter(line => line);
+      const lines = input.split('\n').map(line => line.trim()).filter(Boolean);
 
-      let name = "", line1 = "", road = "", landmark = "", city = "", pincode = "", mobile = "", fromName = "", fromMobile = "";
+      let name = "", addressLines = [], landmark = "", city = "", state = "", pincode = "", mobile = "", fromName = "", fromMobile = "";
 
-      for (const line of lines) {
-        if (/Mob|Phone|Ph/i.test(line)) {
-          const match = line.match(/\d{10}/);
+      for (let line of lines) {
+        line = line.trim();
+
+        if (/^to\b/i.test(line)) {
+          name = line.replace(/^to\b[\:\-]*/i, '').trim();
+        } else if (/landmark[\:\-]/i.test(line)) {
+          landmark = line.split(/[:\-]/)[1]?.trim() || "";
+        } else if (/city[\:\-]/i.test(line)) {
+          city = line.split(/[:\-]/)[1]?.trim() || "";
+        } else if (/state[\:\-]/i.test(line)) {
+          state = line.split(/[:\-]/)[1]?.trim() || "";
+        } else if (/pincode[\:\-]/i.test(line)) {
+          pincode = line.split(/[:\-]/)[1]?.trim() || "";
+        } else if (/mob|mobile/i.test(line)) {
+          let match = line.match(/\d{10}/);
           if (match) mobile = match[0];
-        } else if (/From/i.test(line)) {
-          fromName = line.replace(/From[\-\:]*\s*/i, '');
-        } else if (/\d{6}/.test(line)) {
-          const match = line.match(/(.+?),?\s*(\d{6})/);
-          if (match) {
-            city = match[1].trim();
-            pincode = match[2];
-          }
-        } else if (/near/i.test(line)) {
-          landmark = line;
-        } else if (!name) {
-          name = line;
-        } else if (!line1) {
-          line1 = line;
-        } else if (!road) {
-          road = line;
-        } else if (!fromMobile && /^\d{10}$/.test(line)) {
+        } else if (/^from\b/i.test(line)) {
+          fromName = line.replace(/^from\b[\:\-]*/i, '').trim();
+        } else if (/ph|phone/i.test(line)) {
+          let match = line.match(/\d{10}/);
+          if (match) fromMobile = match[0];
+        } else if (/^\d{10}$/.test(line)) {
           fromMobile = line;
+        } else {
+          addressLines.push(line);
         }
       }
 
-      const state = pincodeStateMap[pincode] || "";
+      // Capitalize values
+      name = capitalizeWords(name);
+      fromName = capitalizeWords(fromName);
+      city = capitalizeWords(city);
+      state = capitalizeWords(state);
+      landmark = capitalizeWords(landmark);
+      addressLines = addressLines.map(capitalizeWords);
 
-      let output = `To:\nName: ${name}`;
-      if (line1) output += `\n#Address: ${line1}`;
-      if (road && city) output += `\n${road}, ${city}`;
-      if (landmark) output += `\nLandmark: ${landmark}`;
-      if (city) output += `\nCity: ${city}`;
-      if (state && pincode) output += `\n*${state}-${pincode}*`;
-      if (mobile) output += `\n#Mob No: ${mobile}`;
+      let formatted = `To: ${name}\n`;
 
-      output += `\n\nFrom:\n${fromName}`;
-      if (fromMobile || mobile) output += `\n#PH NO: ${fromMobile || mobile}`;
+      if (addressLines.length > 0) {
+        formatted += `Address: ${addressLines.join(', ')}.\n`;
+      }
 
-      document.getElementById('output').textContent = output.trim();
+      if (landmark) formatted += `Landmark: ${landmark}\n`;
+      if (city || state || pincode) {
+        formatted += `City: ${capitalizeWords(city)}`;
+        if (state) formatted += `, ${capitalizeWords(state)}`;
+        if (pincode) formatted += ` - ${pincode}`;
+        formatted += `\n`;
+      }
+      if (mobile) formatted += `Mob: ${mobile}\n`;
+
+      formatted += `\nFrom: ${fromName}`;
+      if (fromMobile) formatted += `\nPh: ${fromMobile}`;
+
+      document.getElementById('output').textContent = formatted.trim();
       document.getElementById('copyBtn').style.display = 'inline-block';
     }
 
@@ -114,11 +125,6 @@
       navigator.clipboard.writeText(outputText).then(() => {
         alert("Formatted address copied to clipboard!");
       });
-    }
-
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
     }
   </script>
 </body>
